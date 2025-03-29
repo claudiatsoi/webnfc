@@ -5,9 +5,44 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NFC URL Writer & Verifier</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    button { margin: 5px; padding: 10px 20px; }
-    #status { margin-top: 15px; font-weight: bold; }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+      color: #333;
+    }
+    button {
+      margin: 5px;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      background-color: #007bff;
+      color: white;
+      font-size: 16px;
+    }
+    button:disabled {
+      background-color: #ccc;
+    }
+    #status {
+      margin-top: 15px;
+      font-weight: bold;
+      background-color: #fff;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+    #log {
+      margin-top: 20px;
+      background: #fff;
+      padding: 10px;
+      border-radius: 5px;
+      max-height: 200px;
+      overflow-y: auto;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+    #log h3 {
+      margin-top: 0;
+    }
   </style>
 </head>
 <body>
@@ -22,13 +57,15 @@
     <button id="reset" disabled>Reset</button>
   </div>
   <p id="status">Upload a CSV file to begin.</p>
+  <div id="log"><h3>Write Log</h3><ul id="logList"></ul></div>
 
   <script>
-    let urls = [];
+    let entries = [];
     let currentIndex = 0;
     let paused = false;
 
     const statusEl = document.getElementById("status");
+    const logListEl = document.getElementById("logList");
     const startBtn = document.getElementById("startWriting");
     const pauseBtn = document.getElementById("pause");
     const resumeBtn = document.getElementById("resume");
@@ -45,15 +82,18 @@
     });
     backBtn.addEventListener("click", () => {
       if (currentIndex > 0) currentIndex--;
-      statusEl.textContent = `Back to: ${urls[currentIndex]}`;
+      const { url, name } = entries[currentIndex];
+      statusEl.textContent = `Back to: ${name} (${url})`;
     });
     skipBtn.addEventListener("click", () => {
-      if (currentIndex < urls.length - 1) currentIndex++;
-      statusEl.textContent = `Skipped to: ${urls[currentIndex]}`;
+      if (currentIndex < entries.length - 1) currentIndex++;
+      const { url, name } = entries[currentIndex];
+      statusEl.textContent = `Skipped to: ${name} (${url})`;
     });
     resetBtn.addEventListener("click", () => {
       currentIndex = 0;
       paused = false;
+      logListEl.innerHTML = "";
       statusEl.textContent = `Reset. Ready to start.`;
     });
 
@@ -62,7 +102,11 @@
       const reader = new FileReader();
 
       reader.onload = function (e) {
-        urls = e.target.result.split(/\r?\n/).map(url => url.trim()).filter(Boolean);
+        const lines = e.target.result.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+        entries = lines.map(line => {
+          const [urlPart, namePart] = line.split(",").map(s => s.trim());
+          return { url: urlPart, name: namePart || "Unnamed" };
+        });
         currentIndex = 0;
         startBtn.disabled = false;
         pauseBtn.disabled = false;
@@ -70,7 +114,7 @@
         backBtn.disabled = false;
         skipBtn.disabled = false;
         resetBtn.disabled = false;
-        statusEl.textContent = `${urls.length} URLs loaded.`;
+        statusEl.textContent = `${entries.length} entries loaded.`;
       };
 
       reader.readAsText(file);
@@ -87,8 +131,8 @@
         return;
       }
 
-      if (currentIndex >= urls.length) {
-        statusEl.textContent = "✅ All URLs have been written.";
+      if (currentIndex >= entries.length) {
+        statusEl.textContent = "✅ All entries have been written.";
         return;
       }
 
@@ -98,35 +142,12 @@
       }
 
       try {
-        let url = urls[currentIndex];
+        let { url, name } = entries[currentIndex];
 
-        // Add scheme if missing
         if (!/^https?:\/\//i.test(url)) {
           url = "https://" + url;
         }
 
         const ndef = new NDEFReader();
-        statusEl.textContent = `📲 Tap an NFC tag to write: ${url}`;
-        await ndef.write({ records: [{ recordType: "url", data: url }] });
-
-        await ndef.scan();
-        ndef.onreading = (event) => {
-          const record = event.message.records[0];
-          const decoded = new TextDecoder().decode(record.data);
-          if (decoded === url) {
-            statusEl.textContent = `✅ Verified: ${decoded}`;
-            currentIndex++;
-            setTimeout(writeAndVerify, 1500);
-          } else {
-            statusEl.textContent = `⚠️ Verification failed. Expected: ${url}, Got: ${decoded}`;
-          }
-        };
-
-      } catch (err) {
-        console.error("Error:", err);
-        statusEl.textContent = `❌ Error: ${err.message}`;
-      }
-    }
-  </script>
-</body>
-</html>
+        statusEl.textContent = `📲 Writing: ${name} (${url})`;
+        await ndef
