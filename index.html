@@ -107,7 +107,7 @@
 
         const ndef = new NDEFReader();
         statusEl.textContent = `📲 Tap an NFC tag to write: ${url}`;
-        await ndef.write({ records: [{ recordType: "url", data: new URL(url) }] });
+        await ndef.write({ records: [{ recordType: "url", data: url }] });
 
         await ndef.scan();
         ndef.onreading = (event) => {
