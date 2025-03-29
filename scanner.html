@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NFC URL Writer & Verifier</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    button { margin: 5px; padding: 10px 20px; }
+    #status { margin-top: 15px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>NFC URL Writer & Verifier</h1>
+  <input type="file" id="csvFile" accept=".csv" />
+  <div>
+    <button id="startWriting" disabled>Start</button>
+    <button id="pause" disabled>Pause</button>
+    <button id="resume" disabled>Resume</button>
+    <button id="back" disabled>Back</button>
+    <button id="skip" disabled>Skip</button>
+    <button id="reset" disabled>Reset</button>
+  </div>
+  <p id="status">Upload a CSV file to begin.</p>
+
+  <script>
+    let urls = [];
+    let currentIndex = 0;
+    let paused = false;
+
+    const statusEl = document.getElementById("status");
+    const startBtn = document.getElementById("startWriting");
+    const pauseBtn = document.getElementById("pause");
+    const resumeBtn = document.getElementById("resume");
+    const backBtn = document.getElementById("back");
+    const skipBtn = document.getElementById("skip");
+    const resetBtn = document.getElementById("reset");
+
+    document.getElementById("csvFile").addEventListener("change", handleFileUpload);
+    startBtn.addEventListener("click", startWriting);
+    pauseBtn.addEventListener("click", () => paused = true);
+    resumeBtn.addEventListener("click", () => {
+      paused = false;
+      writeAndVerify();
+    });
+    backBtn.addEventListener("click", () => {
+      if (currentIndex > 0) currentIndex--;
+      statusEl.textContent = `Back to: ${urls[currentIndex]}`;
+    });
+    skipBtn.addEventListener("click", () => {
+      if (currentIndex < urls.length - 1) currentIndex++;
+      statusEl.textContent = `Skipped to: ${urls[currentIndex]}`;
+    });
+    resetBtn.addEventListener("click", () => {
+      currentIndex = 0;
+      paused = false;
+      statusEl.textContent = `Reset. Ready to start.`;
+    });
+
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      const reader = new FileReader();
+
+      reader.onload = function (e) {
+        urls = e.target.result.split(/\r?\n/).filter(Boolean);
+        currentIndex = 0;
+        startBtn.disabled = false;
+        pauseBtn.disabled = false;
+        resumeBtn.disabled = false;
+        backBtn.disabled = false;
+        skipBtn.disabled = false;
+        resetBtn.disabled = false;
+        statusEl.textContent = `${urls.length} URLs loaded.`;
+      };
+
+      reader.readAsText(file);
+    }
+
+    async function startWriting() {
+      paused = false;
+      await writeAndVerify();
+    }
+
+    async function writeAndVerify() {
+      if (!("NDEFReader" in window && "NDEFWriter" in window)) {
+        alert("Web NFC is not supported in this browser.");
+        return;
+      }
+
+      if (currentIndex >= urls.length) {
+        statusEl.textContent = "✅ All URLs have been written.";
+        return;
+      }
+
+      if (paused) {
+        statusEl.textContent = "⏸️ Paused.";
+        return;
+      }
+
+      try {
+        const url = urls[currentIndex];
+        const writer = new NDEFWriter();
+        statusEl.textContent = `📲 Tap an NFC tag to write: ${url}`;
+        await writer.write({ records: [{ recordType: "url", data: url }] });
+
+        const reader = new NDEFReader();
+        await reader.scan();
+
+        reader.onreading = (event) => {
+          const record = event.message.records[0];
+          const decoded = new TextDecoder().decode(record.data);
+          if (decoded === url) {
+            statusEl.textContent = `✅ Verified: ${decoded}`;
+            currentIndex++;
+            setTimeout(writeAndVerify, 1500);
+          } else {
+            statusEl.textContent = `⚠️ Verification failed. Expected: ${url}, Got: ${decoded}`;
+          }
+        };
+
+      } catch (err) {
+        console.error("Error:", err);
+        statusEl.textContent = `❌ Error: ${err.message}`;
+      }
+    }
+  </script>
+</body>
+</html>
