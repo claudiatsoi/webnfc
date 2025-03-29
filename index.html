@@ -82,7 +82,7 @@
     }
 
     async function writeAndVerify() {
-      if (!("NDEFReader" in window && "NDEFWriter" in window)) {
+      if (!("NDEFReader" in window)) {
         alert("Web NFC is not supported in this browser.");
         return;
       }
@@ -99,14 +99,12 @@
 
       try {
         const url = urls[currentIndex];
-        const writer = new NDEFWriter();
+        const ndef = new NDEFReader();
         statusEl.textContent = `📲 Tap an NFC tag to write: ${url}`;
-        await writer.write({ records: [{ recordType: "url", data: url }] });
+        await ndef.write({ records: [{ recordType: "url", data: url }] });
 
-        const reader = new NDEFReader();
-        await reader.scan();
-
-        reader.onreading = (event) => {
+        await ndef.scan();
+        ndef.onreading = (event) => {
           const record = event.message.records[0];
           const decoded = new TextDecoder().decode(record.data);
           if (decoded === url) {
