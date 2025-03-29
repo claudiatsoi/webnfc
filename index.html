@@ -104,9 +104,19 @@
       reader.onload = function (e) {
         const lines = e.target.result.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
         entries = lines.map(line => {
-          const [urlPart, namePart] = line.split(",").map(s => s.trim());
-          return { url: urlPart, name: namePart || "Unnamed" };
-        });
+          const parts = line.split(',');
+          if (parts.length < 1) return null;
+          const urlPart = parts[0].trim();
+          const namePart = parts[1] ? parts[1].trim() : "Unnamed";
+          return { url: urlPart, name: namePart };
+        }).filter(Boolean);
+
+        if (entries.length === 0) {
+          statusEl.textContent = "❌ No valid entries found. Please check your CSV format.";
+          return;
+        }
+
+        console.log("Loaded entries:", entries);
         currentIndex = 0;
         startBtn.disabled = false;
         pauseBtn.disabled = false;
@@ -150,4 +160,24 @@
 
         const ndef = new NDEFReader();
         statusEl.textContent = `📲 Writing: ${name} (${url})`;
-        await ndef
+        await ndef.write({ records: [{ recordType: "url", data: url }] });
+
+        const listItem = document.createElement("li");
+        listItem.textContent = `✅ Wrote: ${name} (${url})`;
+        logListEl.appendChild(listItem);
+
+        if (navigator.vibrate) {
+          navigator.vibrate(100);
+        }
+
+        currentIndex++;
+        setTimeout(writeAndVerify, 1500);
+
+      } catch (err) {
+        console.error("Error:", err);
+        statusEl.textContent = `❌ Error: ${err.message}`;
+      }
+    }
+  </script>
+</body>
+</html>
